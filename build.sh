@@ -5,3 +5,4 @@ pip install -r requirements.txt
 python manage.py collectstatic --noinput
 # Roda em todo deploy (sem precisar do Shell do Render)
 python manage.py migrate --noinput
+python manage.py ensure_superuser
