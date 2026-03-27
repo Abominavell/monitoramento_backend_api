@@ -4,6 +4,8 @@
 
 Use estes valores no painel do **Web Service** (aba **Settings**).
 
+**Importante:** no campo **Build Command**, cole o texto **completo** abaixo. Não use reticências (`...` ou `…`) nem resuma o comando — se aparecer `pip install …` no log, o deploy vai falhar. O arquivo `RENDER_BUILD_COMMAND.txt` na raiz do repo tem a mesma linha para copiar.
+
 ### Build Command
 
 **Recomendado** (usa o script do repositório):
