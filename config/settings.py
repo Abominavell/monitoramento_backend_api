@@ -10,23 +10,51 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
+from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
+import dj_database_url
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Carrega .env na raiz do projeto (não versionado). No Render use variáveis do painel.
+load_dotenv(BASE_DIR / '.env')
+
+
+def _env_bool(key: str, default: bool) -> bool:
+    val = os.environ.get(key)
+    if val is None:
+        return default
+    return val.strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-mzd$p63^-f*exmx$v&=fe!3b6_nn8k%6bry)nu1ig@anor8#nk'
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-mzd$p63^-f*exmx$v&=fe!3b6_nn8k%6bry)nu1ig@anor8#nk',
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _env_bool('DEBUG', True)
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+if not DEBUG and SECRET_KEY.startswith('django-insecure-'):
+    raise ImproperlyConfigured(
+        'Defina SECRET_KEY segura nas variáveis de ambiente quando DEBUG=False.'
+    )
+
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get(
+        'ALLOWED_HOSTS',
+        '127.0.0.1,localhost,.onrender.com',
+    ).split(',')
+    if h.strip()
+]
 
 
 # Application definition
@@ -45,6 +73,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -77,12 +106,21 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Local: SQLite. Produção (Render): variável DATABASE_URL do PostgreSQL.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+_database_url = os.environ.get('DATABASE_URL', '').strip()
+if _database_url:
+    DATABASES['default'] = dj_database_url.parse(
+        _database_url,
+        conn_max_age=600,
+        ssl_require=_env_bool('DATABASE_SSL_REQUIRE', True),
+    )
 
 
 # Password validation
@@ -120,6 +158,28 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
+
+_on_render = os.environ.get('RENDER', '').lower() == 'true'
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', _on_render)
+    SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', _on_render)
+    CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', _on_render)
+
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if o.strip()
+]
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -135,4 +195,11 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    _cors = os.environ.get('CORS_ALLOWED_ORIGINS', '').strip()
+    CORS_ALLOWED_ORIGINS = [
+        o.strip() for o in _cors.split(',') if o.strip()
+    ]

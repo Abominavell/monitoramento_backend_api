@@ -1,0 +1,45 @@
+# Blueprint Render — baseado no export de 2026-03-27 (api-acao-social + Postgres).
+# Se o Postgres já existir no painel com outro nome, ajuste `name` em `databases` e em `fromDatabase`
+# ou remova a seção `databases` e defina DATABASE_URL manualmente no serviço.
+
+services:
+  - type: web
+    # Nome distinto do recurso Postgres "api-acao-social" no painel.
+    name: api-acao-social-web
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: chmod +x build.sh && ./build.sh
+    preDeployCommand: python manage.py migrate --noinput
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    healthCheckPath: /admin/login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: DEBUG
+        value: "false"
+      - key: RENDER
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: api-acao-social
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+
+databases:
+  - name: api-acao-social
+    databaseName: acao_social
+    user: admin
+    plan: free
+    region: oregon
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+    postgresMajorVersion: "18"
