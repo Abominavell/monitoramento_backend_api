@@ -48,6 +48,12 @@ gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --graceful-t
 
 Com frontend em outro domínio, defina também `CORS_ALLOWED_ORIGINS` e `CSRF_TRUSTED_ORIGINS`.
 
+**“Não foi possível contatar a API” / Failed to fetch (upload Excel):**
+
+1. No navegador, na página do **front**, abra o console e rode `location.origin` — esse valor (ex.: `https://meu-front.onrender.com`) deve aparecer **inteiro** em `CORS_ALLOWED_ORIGINS` na API (sem barra no final).
+2. Confirme no front (Render) que `NEXT_PUBLIC_API_URL` é `https://<sua-api>.onrender.com/api` e redeploy do **front** após mudar.
+3. **Atalho no Render:** na API, defina `CORS_REGEX_RENDER` = `true` para aceitar qualquer `https://*.onrender.com` (menos restritivo; use só para destravar).
+
 ### Admin sem Shell (opcional)
 
 Se não tiver acesso ao Shell do Render, defina **só no primeiro deploy** (depois remova do painel):

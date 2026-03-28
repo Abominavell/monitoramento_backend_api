@@ -197,12 +197,20 @@ SIMPLE_JWT = {
 
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGIN_REGEXES = []
 else:
     CORS_ALLOW_ALL_ORIGINS = False
     _cors = os.environ.get('CORS_ALLOWED_ORIGINS', '').strip()
     CORS_ALLOWED_ORIGINS = [
         o.strip() for o in _cors.split(',') if o.strip()
     ]
+    # Atalho no Render: libera qualquer https://*.onrender.com (front + previews).
+    # Defina CORS_REGEX_RENDER=true só se não puder fixar CORS_ALLOWED_ORIGINS com a origem exata.
+    CORS_ALLOWED_ORIGIN_REGEXES = []
+    if _env_bool('CORS_REGEX_RENDER', False):
+        CORS_ALLOWED_ORIGIN_REGEXES = [
+            r'^https://[a-zA-Z0-9_-]+\.onrender\.com$',
+        ]
 
 # Upload em lote (Excel). Padrão 2,5 MB do Django gera 413; Render/proxy também precisam aceitar o corpo.
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(
