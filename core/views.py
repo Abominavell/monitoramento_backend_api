@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from django.contrib.auth import authenticate
 from django.db.models import Q
+from django.db.models.signals import post_save
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.decorators import action
@@ -18,7 +19,8 @@ from .serializers import (
     ProjetoSerializer,
     SetorSerializer,
 )
-from .services import sync_colaborador_sede_user
+from .services import recalcular_vagas_todas_acoes, sync_colaborador_sede_user
+from .signals import recalculate_targets_on_colaborador_save
 
 
 class PublicReadAdminWrite(permissions.BasePermission):
@@ -126,57 +128,67 @@ class ColaboradorViewSet(viewsets.ModelViewSet):
         errors = []
         cpfs_importados = set()
 
-        for row_num in range(2, ws.max_row + 1):
-            raw_cpf = ws.cell(row=row_num, column=header_map["CPF"]).value
-            raw_nome = ws.cell(row=row_num, column=header_map["NOME"]).value
-            raw_data_nasc = ws.cell(row=row_num, column=header_map["DATA NASCIMENTO"]).value
-            raw_setor = ws.cell(row=row_num, column=header_map["SETOR"]).value
+        # Evita N× recalcular_vagas_todas_acoes() (percorre todos os DataProjeto a cada linha),
+        # o que estoura timeout no Render/Gunicorn em importações médias.
+        post_save.disconnect(recalculate_targets_on_colaborador_save, sender=Colaborador)
+        try:
+            for row_num in range(2, ws.max_row + 1):
+                raw_cpf = ws.cell(row=row_num, column=header_map["CPF"]).value
+                raw_nome = ws.cell(row=row_num, column=header_map["NOME"]).value
+                raw_data_nasc = ws.cell(row=row_num, column=header_map["DATA NASCIMENTO"]).value
+                raw_setor = ws.cell(row=row_num, column=header_map["SETOR"]).value
 
-            cpf = "".join(ch for ch in str(raw_cpf or "") if ch.isdigit())
-            nome = str(raw_nome or "").strip()
-            setor_nome = str(raw_setor or "").strip()
-            data_nascimento = self._parse_birth_date(raw_data_nasc)
+                cpf = "".join(ch for ch in str(raw_cpf or "") if ch.isdigit())
+                nome = str(raw_nome or "").strip()
+                setor_nome = str(raw_setor or "").strip()
+                data_nascimento = self._parse_birth_date(raw_data_nasc)
 
-            if not cpf and not nome and not setor_nome and not raw_data_nasc:
-                continue
+                if not cpf and not nome and not setor_nome and not raw_data_nasc:
+                    continue
 
-            if len(cpf) != 11 or not nome or not setor_nome or not data_nascimento:
-                skipped += 1
-                errors.append(f"Linha {row_num}: dados inválidos/incompletos.")
-                continue
+                if len(cpf) != 11 or not nome or not setor_nome or not data_nascimento:
+                    skipped += 1
+                    errors.append(f"Linha {row_num}: dados inválidos/incompletos.")
+                    continue
 
-            cpfs_importados.add(cpf)
-            setor = Setor.objects.filter(nome__iexact=setor_nome).first()
-            if not setor:
-                setor = Setor.objects.create(nome=setor_nome)
+                cpfs_importados.add(cpf)
+                setor = Setor.objects.filter(nome__iexact=setor_nome).first()
+                if not setor:
+                    setor = Setor.objects.create(nome=setor_nome)
 
-            try:
-                colab = Colaborador.objects.filter(cpf=cpf).first()
-                if colab:
-                    colab.nome = nome
-                    colab.setor = setor
-                    colab.data_nascimento = data_nascimento
-                    colab.is_externo = False
-                    colab.ativo = True
-                    colab.save()
-                    updated += 1
-                else:
-                    Colaborador.objects.create(
-                        cpf=cpf,
-                        nome=nome,
-                        setor=setor,
-                        data_nascimento=data_nascimento,
-                        is_externo=False,
-                        ativo=True,
-                    )
-                    created += 1
-            except Exception as exc:
-                skipped += 1
-                errors.append(f"Linha {row_num}: {str(exc)}")
+                try:
+                    colab = Colaborador.objects.filter(cpf=cpf).first()
+                    if colab:
+                        colab.nome = nome
+                        colab.setor = setor
+                        colab.data_nascimento = data_nascimento
+                        colab.is_externo = False
+                        colab.ativo = True
+                        colab.save()
+                        sync_colaborador_sede_user(colab)
+                        updated += 1
+                    else:
+                        colab = Colaborador.objects.create(
+                            cpf=cpf,
+                            nome=nome,
+                            setor=setor,
+                            data_nascimento=data_nascimento,
+                            is_externo=False,
+                            ativo=True,
+                        )
+                        sync_colaborador_sede_user(colab)
+                        created += 1
+                except Exception as exc:
+                    skipped += 1
+                    errors.append(f"Linha {row_num}: {str(exc)}")
+        finally:
+            post_save.connect(recalculate_targets_on_colaborador_save, sender=Colaborador)
 
         desativados = 0
         if cpfs_importados:
             desativados = Colaborador.objects.filter(is_externo=False, ativo=True).exclude(cpf__in=cpfs_importados).update(ativo=False)
+
+        recalcular_vagas_todas_acoes()
 
         return Response(
             {
