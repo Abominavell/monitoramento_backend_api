@@ -1,3 +1,4 @@
+# Python 3.12+ (testado com 3.13.11 — cPanel / Render)
 python-dotenv>=1.0
 Django>=6.0,<7
 djangorestframework>=3.15

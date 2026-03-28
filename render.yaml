@@ -15,7 +15,7 @@ services:
     healthCheckPath: /admin/login/
     envVars:
       - key: PYTHON_VERSION
-        value: "3.12.8"
+        value: "3.13.11"
       - key: DEBUG
         value: "false"
       - key: RENDER

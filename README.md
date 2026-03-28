@@ -56,6 +56,22 @@ Se não tiver acesso ao Shell do Render, defina **só no primeiro deploy** (depo
 
 O comando `ensure_superuser` roda no final do `build.sh` e só cria o usuário se **ainda não existir nenhum** usuário no banco.
 
+### Versão do Python
+
+O projeto segue **Python 3.12 ou superior**; no **cPanel** use **3.13.11** quando for a única opção.
+
+- `runtime.txt` e `.python-version` fixam **3.13.11** para documentação e ferramentas (pyenv, alguns hosts).
+- Localmente: `pyenv install 3.13.11` (ou instale 3.13 pelo instalador oficial) e ative antes do `pip install`.
+
+Não é necessário alterar código Django só por causa do 3.13 — mantenha `requirements.txt` atualizado.
+
+### cPanel (Python 3.13.11)
+
+1. No cPanel, crie o **Python App** com interpretador **3.13.11** e aponte a raiz para a pasta do repositório (onde está `manage.py`).
+2. No **virtualenv** do app: `pip install -r requirements.txt`
+3. Rode `collectstatic`, `migrate` e (opcional) `ensure_superuser` como no `build.sh`, via **Terminal** ou script de deploy.
+4. **Banco:** este projeto usa **PostgreSQL** (`psycopg`). Se o cPanel só oferecer **MySQL**, será preciso outro plano/host com Postgres ou adaptar o backend — não basta trocar só a versão do Python.
+
 ### Desenvolvimento local
 
 Copie `.env.example` para `.env`, suba o Postgres ou deixe `DATABASE_URL` vazio para SQLite, e:
