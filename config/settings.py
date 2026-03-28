@@ -203,3 +203,11 @@ else:
     CORS_ALLOWED_ORIGINS = [
         o.strip() for o in _cors.split(',') if o.strip()
     ]
+
+# Upload em lote (Excel). Padrão 2,5 MB do Django gera 413; Render/proxy também precisam aceitar o corpo.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.environ.get('DATA_UPLOAD_MAX_MEMORY_SIZE', str(50 * 1024 * 1024))
+)
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.environ.get('FILE_UPLOAD_MAX_MEMORY_SIZE', str(50 * 1024 * 1024))
+)

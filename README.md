@@ -23,8 +23,10 @@ pip install -r requirements.txt && python manage.py collectstatic --noinput && p
 ### Start Command
 
 ```bash
-gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 30
 ```
+
+(O `Procfile` do repositório já inclui `--timeout 120` para importação Excel demorar sem o worker ser morto.)
 
 ### Campos comuns
 
